@@ -1,30 +1,18 @@
 import math
-
 import cv2
 import numpy as np
-
 import Preprocess
 
 ADAPTIVE_THRESH_BLOCK_SIZE = 19
 ADAPTIVE_THRESH_WEIGHT = 9
-
 n = 1
-
 Min_char = 0.01
 Max_char = 0.09
-
 RESIZED_IMAGE_WIDTH = 20
 RESIZED_IMAGE_HEIGHT = 30
 
-img = cv2.imread("data/image/1.jpg")
+img = cv2.imread("data/image/img_13.png")
 img = cv2.resize(img, dsize=(1920, 1080))
-
-###################### Nếu bạn muốn thử tăng độ tương phản #####################
-#img2 = cv2.imread("bsxm3.png")
-#imgGrayscaleplate2, _ = Preprocess.preprocess(img)
-#imgThreshplate2 = cv2.adaptiveThreshold(imgGrayscaleplate2, 250, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, ADAPTIVE_THRESH_BLOCK_SIZE ,ADAPTIVE_THRESH_WEIGHT )
-#v2.imshow("imgThreshplate2",imgThreshplate2)
-###############################################################
 
 ######## Tải mô hình KNN ######################
 npaClassifications = np.loadtxt("classifications.txt", np.float32)
@@ -33,11 +21,10 @@ npaClassifications = npaClassifications.reshape(
     (npaClassifications.size, 1))  # Định hình lại mảng numpy thành 1d, cần thiết để truyền cho hàm train
 kNearest = cv2.ml.KNearest_create()  # Khởi tạo đối tượng KNN
 kNearest.train(npaFlattenedImages, cv2.ml.ROW_SAMPLE, npaClassifications)
-#########################
 
 ################ Xử lý ảnh #################
 imgGrayscaleplate, imgThreshplate = Preprocess.preprocess(img)
-canny_image = cv2.Canny(imgThreshplate, 250, 255)  # Cạnh Canny
+canny_image = cv2.Canny(imgThreshplate, 200, 255)  # Cạnh Canny
 kernel = np.ones((2, 2), np.uint8)
 dilated_image = cv2.dilate(canny_image, kernel, iterations=2)  # Giãn nở
 cv2.imshow("dilated_image",dilated_image)
@@ -49,8 +36,6 @@ cv2.imshow("dilated_image",dilated_image)
 contours, hierarchy = cv2.findContours(dilated_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
 contours = sorted(contours, key=cv2.contourArea, reverse=True)[:20]  # Lấy 10 contours có diện tích lớn nhất
-
-#cv2.drawContours(img, contours, -1, (255, 0, 255), 3)  # Vẽ tất cả các contour trong hình lớn
 
 screenCnt = []
 for c in contours:
@@ -85,8 +70,6 @@ if detected == 1:
         doi = abs(y1 - y2)
         ke = abs(x1 - x2)
         angle = math.atan(doi / ke) * (180.0 / math.pi)
-
-        ####################################
 
         ########## Cắt biển số xe và căn chỉnh nó theo góc đúng ################
 
@@ -124,8 +107,6 @@ if detected == 1:
         aligned_roi = cv2.resize(aligned_roi, (0, 0), fx=4, fy=4)
         aligned_imgThresh = cv2.resize(aligned_imgThresh, (0, 0), fx=4, fy=4)
 
-        ####################################
-
         #################### Tiền xử lý và phân đoạn ký tự ####################
         # Tạo phần tử cấu trúc hình chữ nhật 3x3 để sử dụng trong các phép biến đổi hình thái học
         kerel3 = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
@@ -154,19 +135,16 @@ if detected == 1:
             (x, y, w, h) = cv2.boundingRect(cnt)
             ratiochar = w / h
             char_area = w * h
-
             # Điều kiện lọc ký tự dựa vào diện tích và tỷ lệ ký tự
             if (Min_char * roiarea < char_area < Max_char * roiarea) and (0.2 < ratiochar < 0.8):
                 if cv2.contourArea(cnt) > 10:  # Điều kiện này có thể điều chỉnh tùy theo kích thước thực tế của ký tự
                     char_x.append(x)
                     char_x_ind[x] = ind
-
         # Nhận dạng ký tự
         char_x = sorted(char_x)
         strFinalString = ""
         first_line = ""
         second_line = ""
-
         for i in char_x:
             (x, y, w, h) = cv2.boundingRect(cont[char_x_ind[i]])
 
@@ -191,15 +169,12 @@ if detected == 1:
                     first_line += strCurrentChar
                 else:
                     second_line += strCurrentChar
-
-        # Hiển thị kết quả nhận dạng
         print("\n Biển số là: " + first_line + " - " + second_line + "\n")
         roi = cv2.resize(roi, None, fx=0.75, fy=0.75)
         cv2.imshow("Biển số đã nhận dạng", cv2.cvtColor(roi, cv2.COLOR_BGR2RGB))
 
         # Hiển thị biển số đã nhận dạng trên ảnh gốc
         cv2.putText(img, first_line + "-" + second_line, (topy, topx), cv2.FONT_HERSHEY_DUPLEX, 2, (0, 255, 255), 2)
-
 
 img = cv2.resize(img, None, fx=0.5, fy=0.5)
 cv2.imshow('Biển số xe', img)
