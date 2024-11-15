@@ -1,175 +1,160 @@
-import math
 import cv2
 import numpy as np
-import Preprocess
+import math
+import tkinter as tk
+from tkinter import filedialog
+from tkinter import Label, Button
+from PIL import Image, ImageTk
+import Preprocess  # Make sure to have Preprocess.py for preprocessing functions
 
 ADAPTIVE_THRESH_BLOCK_SIZE = 19
 ADAPTIVE_THRESH_WEIGHT = 9
-
-Min_char_area = 0.015
-Max_char_area = 0.06
-
 Min_char = 0.01
 Max_char = 0.09
-
-Min_ratio_char = 0.25
-Max_ratio_char = 0.7
-
-max_size_plate = 18000
-min_size_plate = 5000
-
 RESIZED_IMAGE_WIDTH = 20
 RESIZED_IMAGE_HEIGHT = 30
 
-tongframe = 0
-biensotimthay = 0
 
-# Load KNN model
-npaClassifications = np.loadtxt("classifications.txt", np.float32)
-npaFlattenedImages = np.loadtxt("flattened_images.txt", np.float32)
-npaClassifications = npaClassifications.reshape((npaClassifications.size, 1))
-kNearest = cv2.ml.KNearest_create()
-kNearest.train(npaFlattenedImages, cv2.ml.ROW_SAMPLE, npaClassifications)
+class LicensePlateRecognitionApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("License Plate Recognition")
+        self.root.geometry("1200x800")
 
-# Sử dụng camera để đọc hình ảnh
-cap = cv2.VideoCapture(0)  # 0 cho camera mặc định, nếu có nhiều camera bạn có thể thay đổi thành 1, 2...
+        self.img_label = Label(root)
+        self.img_label.pack()
 
-while (cap.isOpened()):
-    ret, img = cap.read()
-    if not ret:  # Nếu không lấy được hình ảnh
-        print("Không thể đọc hình ảnh từ camera")
-        break
+        self.result_label = Label(root, text="Detected License Plate: ", font=("Helvetica", 16))
+        self.result_label.pack()
 
-    tongframe += 1
+        load_button = Button(root, text="Load Image", command=self.load_image)
+        load_button.pack()
 
-    # Tiền xử lý hình ảnh
-    imgGrayscaleplate, imgThreshplate = Preprocess.preprocess(img)
-    canny_image = cv2.Canny(imgThreshplate, 250, 255)
-    kernel = np.ones((3, 3), np.uint8)
-    dilated_image = cv2.dilate(canny_image, kernel, iterations=1)
+        self.kNearest = self.load_knn_model()
 
-    # Tìm biển số xe
-    contours, hierarchy = cv2.findContours(dilated_image, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
-    screenCnt = []
+    def load_knn_model(self):
+        npaClassifications = np.loadtxt("classifications.txt", np.float32)
+        npaFlattenedImages = np.loadtxt("flattened_images.txt", np.float32)
+        npaClassifications = npaClassifications.reshape((npaClassifications.size, 1))
 
-    for c in contours:
-        peri = cv2.arcLength(c, True)
-        approx = cv2.approxPolyDP(c, 0.06 * peri, True)
-        [x, y, w, h] = cv2.boundingRect(approx.copy())
-        ratio = w / h
-        if (len(approx) == 4) and (0.8 <= ratio <= 1.5 or 4.5 <= ratio <= 6.5):
-            screenCnt.append(approx)
+        kNearest = cv2.ml.KNearest_create()
+        kNearest.train(npaFlattenedImages, cv2.ml.ROW_SAMPLE, npaClassifications)
+        return kNearest
 
-    detected = 1 if screenCnt else 0  # Cách kiểm tra có tìm thấy biển số
+    def load_image(self):
+        file_path = filedialog.askopenfilename()
+        if file_path:
+            img = cv2.imread(file_path)
+            img = cv2.resize(img, dsize=(800, 600))
+            self.process_image(img)
 
-    if detected == 1:
-        n = 1
-        for screenCnt in screenCnt:
-            ################## Tìm góc của biển số ###############
-            (x1, y1) = screenCnt[0, 0]
-            (x2, y2) = screenCnt[1, 0]
-            (x3, y3) = screenCnt[2, 0]
-            (x4, y4) = screenCnt[3, 0]
-            array = [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
-            sorted_array = sorted(array, key=lambda x: x[1], reverse=True)
-            (x1, y1) = sorted_array[0]
-            (x2, y2) = sorted_array[1]
+    def process_image(self, img):
+        imgGrayscale, imgThresh = Preprocess.preprocess(img)
+        canny_image = cv2.Canny(imgThresh, 200, 255)
+        kernel = np.ones((2, 2), np.uint8)
+        dilated_image = cv2.dilate(canny_image, kernel, iterations=2)
 
-            doi = abs(y1 - y2)
-            ke = abs(x1 - x2)
-            angle = math.atan(doi / ke) * (180.0 / math.pi)
+        contours, _ = cv2.findContours(dilated_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:20]
 
-            # Mask phần khác ngoài biển số
-            mask = np.zeros(imgGrayscaleplate.shape, np.uint8)
-            new_image = cv2.drawContours(mask, [screenCnt], 0, 255, -1)
+        screenCnt = None
+        for c in contours:
+            peri = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.06 * peri, True)
+            if len(approx) == 4:
+                screenCnt = approx
+                break
 
-            # Cắt biển số
-            (x, y) = np.where(mask == 255)
-            (topx, topy) = (np.min(x), np.min(y))
-            (bottomx, bottomy) = (np.max(x), np.max(y))
+        if screenCnt is None:
+            self.result_label.config(text="No license plate detected")
+            return
 
-            roi = img[topx:bottomx + 1, topy:bottomy + 1]
-            imgThresh = imgThreshplate[topx:bottomx + 1, topy:bottomy + 1]
+        cv2.drawContours(img, [screenCnt], -1, (0, 255, 0), 3)
 
-            ptPlateCenter = (bottomx - topx) / 2, (bottomy - topy) / 2
+        (x1, y1) = screenCnt[0, 0]
+        (x2, y2) = screenCnt[1, 0]
+        (x3, y3) = screenCnt[2, 0]
+        (x4, y4) = screenCnt[3, 0]
+        array = [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
+        sorted_array = array.sort(reverse=True, key=lambda x: x[1])
+        (x1, y1) = array[0]
+        (x2, y2) = array[1]
+        doi = abs(y1 - y2)
+        ke = abs(x1 - x2)
+        angle = math.atan(doi / ke) * (180.0 / math.pi)
+        mask = np.zeros(imgGrayscale.shape, np.uint8)
+        cv2.drawContours(mask, [screenCnt], 0, 255, thickness=cv2.FILLED)
+        y_coords, x_coords = np.where(mask == 255)
+        topx, topy = np.min(y_coords), np.min(x_coords)
+        bottomx, bottomy = np.max(y_coords), np.max(x_coords)
 
-            if x1 < x2:
-                rotationMatrix = cv2.getRotationMatrix2D(ptPlateCenter, -angle, 1.0)
+        roi = img[topx:bottomx, topy:bottomy]
+        imgThreshPlate = imgThresh[topx:bottomx, topy:bottomy]
+
+        ptPlateCenter = ((bottomx - topx) / 2, (bottomy - topy) / 2)
+        if x1 < x2:
+            rotationMatrix = cv2.getRotationMatrix2D(ptPlateCenter, -angle, 1.0)
+        else:
+            rotationMatrix = cv2.getRotationMatrix2D(ptPlateCenter, angle, 1.0)
+
+        aligned_roi = cv2.warpAffine(roi, rotationMatrix, (bottomy - topy, bottomx - topx))
+        aligned_imgThresh = cv2.warpAffine(imgThreshPlate, rotationMatrix, (bottomy - topy, bottomx - topx))
+
+        aligned_roi = cv2.resize(aligned_roi, (0, 0), fx=4, fy=4)
+        aligned_imgThresh = cv2.resize(aligned_imgThresh, (0, 0), fx=4, fy=4)
+
+        kerel3 = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        thre_mor = cv2.morphologyEx(aligned_imgThresh, cv2.MORPH_CLOSE, kerel3)
+        thre_mor = cv2.morphologyEx(thre_mor, cv2.MORPH_DILATE, kerel3)
+
+        cont, _ = cv2.findContours(thre_mor, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        height, width, _ = aligned_roi.shape
+        roiarea = height * width
+        char_x = []
+        char_x_ind = {}
+
+        for ind, cnt in enumerate(cont):
+            x, y, w, h = cv2.boundingRect(cnt)
+            char_area = w * h
+            if Min_char * roiarea < char_area < Max_char * roiarea and 0.2 < w / h < 0.8:
+                char_x.append(x)
+                char_x_ind[x] = ind
+
+        char_x = sorted(char_x)
+        first_line = ""
+        second_line = ""
+
+        for i in char_x:
+            x, y, w, h = cv2.boundingRect(cont[char_x_ind[i]])
+            imgROI = thre_mor[y:y + h, x:x + w]
+            imgROIResized = cv2.resize(imgROI, (RESIZED_IMAGE_WIDTH, RESIZED_IMAGE_HEIGHT))
+            npaROIResized = imgROIResized.reshape((1, RESIZED_IMAGE_WIDTH * RESIZED_IMAGE_HEIGHT))
+            npaROIResized = np.float32(npaROIResized)
+
+            _, npaResults, _, _ = self.kNearest.findNearest(npaROIResized, k=3)
+            strCurrentChar = str(chr(int(npaResults[0][0])))
+
+            if y < height / 4:
+                first_line += strCurrentChar
             else:
-                rotationMatrix = cv2.getRotationMatrix2D(ptPlateCenter, angle, 1.0)
+                second_line += strCurrentChar
 
-            roi = cv2.warpAffine(roi, rotationMatrix, (bottomy - topy, bottomx - topx))
-            imgThresh = cv2.warpAffine(imgThresh, rotationMatrix, (bottomy - topy, bottomx - topy))
+        license_plate = first_line + "-" + second_line
+        self.result_label.config(text="Detected License Plate: " + license_plate)
 
-            roi = cv2.resize(roi, (0, 0), fx=3, fy=3)
-            imgThresh = cv2.resize(imgThresh, (0, 0), fx=3, fy=3)
+        self.display_image(img)
 
-            # Tiền xử lý biển số
-            kerel3 = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-            thre_mor = cv2.morphologyEx(imgThresh, cv2.MORPH_DILATE, kerel3)
-            cont, hier = cv2.findContours(thre_mor, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    def display_image(self, img):
+        img = cv2.resize(img, (600, 400))
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        im_pil = Image.fromarray(img_rgb)
+        img_tk = ImageTk.PhotoImage(image=im_pil)
+        self.img_label.config(image=img_tk)
+        self.img_label.image = img_tk
 
-            # Phân đoạn ký tự
-            char_x_ind = {}
-            char_x = []
-            height, width, _ = roi.shape
-            roiarea = height * width
 
-            for ind, cnt in enumerate(cont):
-                area = cv2.contourArea(cnt)
-                (x, y, w, h) = cv2.boundingRect(cont[ind])
-                ratiochar = w / h
-                if (Min_char * roiarea < area < Max_char * roiarea) and (0.25 < ratiochar < 0.7):
-                    if x in char_x:  # Sử dụng để dù cho trùng x vẫn vẽ được
-                        x = x + 1
-                    char_x.append(x)
-                    char_x_ind[x] = ind
-
-            # Nhận diện ký tự
-            if len(char_x) in range(7, 10):
-                cv2.drawContours(img, [screenCnt], -1, (0, 255, 0), 3)
-
-                char_x = sorted(char_x)
-                strFinalString = ""
-                first_line = ""
-                second_line = ""
-
-                for i in char_x:
-                    (x, y, w, h) = cv2.boundingRect(cont[char_x_ind[i]])
-                    cv2.rectangle(roi, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-                    imgROI = thre_mor[y:y + h, x:x + w]  # Cắt ký tự
-
-                    imgROIResized = cv2.resize(imgROI,
-                                               (RESIZED_IMAGE_WIDTH, RESIZED_IMAGE_HEIGHT))  # thay đổi kích thước
-                    npaROIResized = imgROIResized.reshape(
-                        (1, RESIZED_IMAGE_WIDTH * RESIZED_IMAGE_HEIGHT))  # Đưa hình ảnh về mảng 1 chiều
-                    npaROIResized = np.float32(npaROIResized)  # chuyển mảng về dạng float
-                    _, npaResults, neigh_resp, dists = kNearest.findNearest(npaROIResized, k=3)
-                    strCurrentChar = str(chr(int(npaResults[0][0])))  # ASCII của ký tự
-                    cv2.putText(roi, strCurrentChar, (x, y + 50), cv2.FONT_HERSHEY_DUPLEX, 2, (0, 255, 255), 3)
-
-                    if (y < height / 3):
-                        first_line += strCurrentChar
-                    else:
-                        second_line += strCurrentChar
-
-                strFinalString = first_line + second_line
-                print("\nBiển số " + str(n) + " là: " + strFinalString)  # In biển số ra console
-                cv2.putText(img, strFinalString, (topy, topx), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 255, 255), 1)
-                n += 1
-                biensotimthay += 1
-
-                # Hiển thị hình ảnh biển số đã nhận diện
-                cv2.imshow("Biển số đã nhận diện", cv2.cvtColor(roi, cv2.COLOR_BGR2RGB))
-
-    imgcopy = cv2.resize(img, None, fx=0.5, fy=0.5)
-    cv2.imshow('Kết quả nhận diện', imgcopy)
-
-    key = cv2.waitKey(1)
-    if key == ord('q'):  # Nhấn 'q' để thoát
-        break
-
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = LicensePlateRecognitionApp(root)
+    root.mainloop()
