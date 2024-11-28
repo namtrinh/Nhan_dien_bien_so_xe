@@ -157,9 +157,12 @@ class MainWindow:
                 cont, hier = cv2.findContours(thre_mor, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
                 cv2.imshow(str(n + 20), thre_mor)
-                cv2.drawContours(roi, cont, -1, (100, 255, 255), 2)  # Vẽ contour các kí tự trong biển số
+                cv2.drawContours(roi, cont, -1, (100, 255, 255), 10)  # Vẽ contour các kí tự trong biển số
 
                 ##################### Lọc vùng kí tự #################
+
+                ## lọc ra coii thử nào có kích thước dúng vì các kí tự có kích thước giống nhau
+                #kích thước counter nằm trong phạm vi hợp lí được coii là kí tự
                 char_x_ind = {}
                 char_x = []
                 height, width, _ = roi.shape
@@ -172,6 +175,7 @@ class MainWindow:
                     # cv2.putText(roi, str(char_area), (x, y+20),cv2.FONT_HERSHEY_DUPLEX, 2, (255, 255, 0), 2)
                     # cv2.putText(roi, str(ratiochar), (x, y+20),cv2.FONT_HERSHEY_DUPLEX, 2, (255, 255, 0), 2)
 
+                    ## lọc ra các counter có kích thuóc hợp lí
                     if (Min_char * roiarea < char_area < Max_char * roiarea) and (0.25 < ratiochar < 0.7):
                         if x in char_x:  # Sử dụng để dù cho trùng x vẫn vẽ được
                             x = x + 1
@@ -189,6 +193,7 @@ class MainWindow:
 
                 for i in char_x:
                     (x, y, w, h) = cv2.boundingRect(cont[char_x_ind[i]])
+                    ## vẽ hình chữ nhật với các counter có kích thước đúng
                     cv2.rectangle(roi, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
                     imgROI = thre_mor[y:y + h, x:x + w]  # cắt kí tự ra khỏi hình
