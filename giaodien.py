@@ -122,6 +122,7 @@ class Ui_MainWindow(object):
         # Placeholder text for video (as an example)
         self.txt_img.setText("Đang xử lý video...")
 
+
     def clear_results(self):
         # Clear the image and text fields
         self.img.clear()
