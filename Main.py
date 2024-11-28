@@ -386,10 +386,14 @@ class MainWindow:
 
         # Đọc video
         cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            print("Không thể mở camera.")
+            return
         while (cap.isOpened()):
             # Tiền xử lý ảnh
             ret, img = cap.read()
             if ret:
+                img_resized = cv2.resize(img, (1280, 720))
                 # xử lý frame ở đây
                 tongframe += 1
                 imgGrayscaleplate, imgThreshplate = Preprocess.preprocess(img)
@@ -519,16 +523,27 @@ class MainWindow:
                         n = n + 1
                         biensotimthay = biensotimthay + 1
 
-                        cv2.imshow("a", cv2.cvtColor(roi, cv2.COLOR_BGR2RGB))
+                        # Chuyển đổi ảnh BGR sang RGB
+                    img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
+                    cv2.imshow("a", img_rgb)
+                    # Chuyển đổi thành QPixmap
+                    h, w, ch = img_rgb.shape
+                    bytes_per_line = ch * w
+                    qimg = QImage(img_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                    pixmap = QPixmap.fromImage(qimg)
+                    # Cập nhật ảnh lên widget, đảm bảo không bị co giãn
+                    self.uic.img.setPixmap(pixmap.scaled(self.uic.img.size(), Qt.KeepAspectRatio))
 
-            imgcopy = cv2.resize(img, (1280, 720), fx=0.5, fy=0.5)
-            cv2.imshow('License plate', imgcopy)
-            print("biensotimthay", biensotimthay)
-            print("tongframe", tongframe)
-            print("ti le tim thay bien so:", 100 * biensotimthay / (368), "%")
+                    # In ra thông tin về số lượng biển số tìm thấy
+                    print("biensotimthay", biensotimthay)
+                    print("tongframe", tongframe)
+                    print("ti le tim thay bien so:", 100 * biensotimthay / (368), "%")
+
+                        # Nếu nhấn 'q', dừng vòng lặp
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
+        # Giải phóng tài nguyên và đóng cửa sổ OpenCV khi kết thúc
         cap.release()
         cv2.destroyAllWindows()
 
