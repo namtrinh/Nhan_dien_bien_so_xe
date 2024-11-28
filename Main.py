@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QImage
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
@@ -344,16 +344,23 @@ class MainWindow:
                             biensotimthay += 1
                             cv2.imshow("License Plate", cv2.cvtColor(roi, cv2.COLOR_BGR2RGB))
 
-                imgcopy = cv2.resize(img, (1280, 720), fx=0.5, fy=0.5)
-                cv2.imshow('License plate', imgcopy)
-                print("biensotimthay", biensotimthay)
-                print("tongframe", tongframe)
-                print("ti le tim thay bien so:", 100 * biensotimthay / (368), "%")
+                            # Chuyển đổi ảnh BGR sang RGB cho Qt
+                        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        # Chuyển đổi thành QPixmap
+                        h, w, ch = img_rgb.shape
+                        bytes_per_line = ch * w
+                        qimg = QImage(img_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                        pixmap = QPixmap.fromImage(qimg)
 
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-            else:
-                break
+                        # Cập nhật hình ảnh lên widget
+                        self.uic.img.setPixmap(pixmap)
+
+                        print("biensotimthay", biensotimthay)
+                        print("tongframe", tongframe)
+                        print("ti le tim thay bien so:", 100 * biensotimthay / (368), "%")
+
+                        if cv2.waitKey(1) & 0xFF == ord('q'):
+                            break
 
         cap.release()
         cv2.destroyAllWindows()
