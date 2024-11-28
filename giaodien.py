@@ -62,12 +62,12 @@ class Ui_MainWindow(object):
         self.btn_vid = QtWidgets.QPushButton("VIDEO", self.centralwidget)
         self.btn_img_detec = QtWidgets.QPushButton("IMAGE_DETECTION", self.centralwidget)
         self.btn_vid_detec = QtWidgets.QPushButton("VIDEO_DETECTION", self.centralwidget)
-
+        self.btn_real = QtWidgets.QPushButton("REALTIME", self.centralwidget)
 
         # Set font and padding for larger buttons
         font_buttons = QtGui.QFont()
         font_buttons.setPointSize(16)  # Increase font size for buttons
-        for button in [self.btn_img, self.btn_vid, self.btn_img_detec, self.btn_vid_detec]:
+        for button in [self.btn_img, self.btn_vid, self.btn_img_detec, self.btn_vid_detec, self.btn_real]:
             button.setFont(font_buttons)
             button.setMinimumHeight(50)  # Increase button height for better appearance
             button.setMinimumWidth(150)  # Increase button width
@@ -77,7 +77,7 @@ class Ui_MainWindow(object):
         self.button_layout.addWidget(self.btn_vid)
         self.button_layout.addWidget(self.btn_img_detec)
         self.button_layout.addWidget(self.btn_vid_detec)
-
+        self.button_layout.addWidget(self.btn_real)
 
         # Add button layout to main layout
         self.layout.addLayout(self.button_layout)
